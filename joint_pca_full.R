@@ -188,6 +188,7 @@ adni_emif_int_imputed.data$ID <- adni_emif.data$ID
 pca.fit <- pca(adni_emif_int_imputed.data[adni_biomarkers], nfactors = 5)
 # Save loadings
 write.csv(unclass(pca.fit$loadings), "results/pca_biomarkers_int_adni_emif_full.csv")
+save(pca.fit, file = "results/pca.Rdata")
 # compute PC scores
 pca_adni_emif.data <- data.frame(predict(pca.fit, data = adni_emif_int_imputed.data[adni_biomarkers]))
 pca_adni_emif.data$study <- adni_emif.data$study
@@ -289,5 +290,14 @@ round(cor(pca_cov_emif.data[c("RC1","RC3","RC2","RC4","RC5","MCI_Baseline_Diagno
 
 # Save
 save(pca_cov_emif.data, file = "phenotypes/GWAS/pca_cov_emif.Rdata")
+
+### Save file for imputed/INT transformed single biomarker
+# ADNI
+pca_cov_single_adni.data <- merge(pca_cov_adni.data, adni_emif_int_imputed.data[c("ID",adni_biomarkers)], by = "ID")
+save(pca_cov_single_adni.data, file = "phenotypes/GWAS/pca_cov_single_adni.Rdata")
+
+# EMIF
+pca_cov_single_emif.data <- merge(pca_cov_emif.data, adni_emif_int_imputed.data[c("ID",adni_biomarkers)], by = "ID")
+save(pca_cov_single_emif.data, file = "phenotypes/GWAS/pca_cov_single_emif.Rdata")
 
                                       

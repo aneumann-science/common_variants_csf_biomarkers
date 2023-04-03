@@ -64,6 +64,28 @@ emif_adni.data$snp <- emif_adni.data$`19_45411941_19:45411941_T_C_T`
 emif_adni.data$snp <- emif_adni.data$`7_12270770_7:12270770_T_A_T`
 
 ###### SEM
+### Baseline model for r2 calculations
+baseline.model <- '
+  # SNP -> PC
+  RC1 ~ SEX + AGE + PC1 + PC2 + PC3 + PC4 + PC5 + ADNI_genotyping + EMIF
+  RC2 ~ SEX + AGE + PC1 + PC2 + PC3 + PC4 + PC5 + ADNI_genotyping + EMIF
+  RC3 ~ SEX + AGE + PC1 + PC2 + PC3 + PC4 + PC5 + ADNI_genotyping + EMIF
+  RC4 ~ SEX + AGE + PC1 + PC2 + PC3 + PC4 + PC5 + ADNI_genotyping + EMIF
+  RC5 ~ SEX + AGE + PC1 + PC2 + PC3 + PC4 + PC5 + ADNI_genotyping + EMIF
+
+  # PC -> Latent AD  
+  diagnosis ~ rc1_diagnosis*RC1 + rc2_diagnosis*RC2 + rc3_diagnosis*RC3 + rc4_diagnosis*RC4 + rc5_diagnosis*RC5 + SEX + AGE + PC1 + PC2 + PC3 + PC4 + PC5 + ADNI_genotyping + EMIF
+'
+
+baseline.fit <- sem(baseline.model, data = emif_adni.data, estimator = "WLSMV")
+baseline_results.data <- parameterestimates(baseline.fit, rsquare = T)
+r2_baseline_pc1 <- baseline_results.data[baseline_results.data$lhs == "RC1" & baseline_results.data$op == "r2", "est"]
+r2_baseline_pc2 <- baseline_results.data[baseline_results.data$lhs == "RC2" & baseline_results.data$op == "r2", "est"]
+r2_baseline_pc3 <- baseline_results.data[baseline_results.data$lhs == "RC3" & baseline_results.data$op == "r2", "est"]
+r2_baseline_pc4 <- baseline_results.data[baseline_results.data$lhs == "RC4" & baseline_results.data$op == "r2", "est"]
+r2_baseline_pc5 <- baseline_results.data[baseline_results.data$lhs == "RC5" & baseline_results.data$op == "r2", "est"]
+r2_baseline_ad <- baseline_results.data[baseline_results.data$lhs == "diagnosis" & baseline_results.data$op == "r2", "est"]
+
 ### Main effects mediation model
 mediation.model <- '
   # SNP -> PC
@@ -108,7 +130,7 @@ mediation.list <- lapply(snp_names, function(snp_name) {
   mediation.fit <- sem(mediation.model, data = emif_adni.data, estimator = "WLSMV")
   
   # Format results
-  results.data <- parameterestimates(mediation.fit)
+  results.data <- parameterestimates(mediation.fit, rsquare = T)
   rc1_mediation.data <- results.data[results.data$label == "rc1_mediation",c("est","se","pvalue","ci.lower","ci.upper")]
   names(rc1_mediation.data) <- paste0(names(rc1_mediation.data),"_rc1_mediation")
   rc2_mediation.data <- results.data[results.data$label == "rc2_mediation",c("est","se","pvalue","ci.lower","ci.upper")]
@@ -125,9 +147,15 @@ mediation.list <- lapply(snp_names, function(snp_name) {
   names(direct.data) <- paste0(names(direct.data),"_direct")
   total.data <- results.data[results.data$label == "total",c("est","se","pvalue","ci.lower","ci.upper")]
   names(total.data) <- paste0(names(total.data),"_total")
+  r2_pc1 <- results.data[results.data$lhs == "RC1" & results.data$op == "r2", "est"] - r2_baseline_pc1
+  r2_pc2 <- results.data[results.data$lhs == "RC2" & results.data$op == "r2", "est"] - r2_baseline_pc2
+  r2_pc3 <- results.data[results.data$lhs == "RC3" & results.data$op == "r2", "est"] - r2_baseline_pc3
+  r2_pc4 <- results.data[results.data$lhs == "RC4" & results.data$op == "r2", "est"] - r2_baseline_pc4
+  r2_pc5 <- results.data[results.data$lhs == "RC5" & results.data$op == "r2", "est"] - r2_baseline_pc5
+  r2_ad <- results.data[results.data$lhs == "diagnosis" & results.data$op == "r2", "est"] - r2_baseline_ad
   
   # Combine all results
-  cbind(snp_name,total.data,direct.data,biomarker_mediation.data,rc1_mediation.data,rc2_mediation.data,rc3_mediation.data,rc4_mediation.data,rc5_mediation.data)
+  cbind(snp_name,total.data,direct.data,biomarker_mediation.data,rc1_mediation.data,rc2_mediation.data,rc3_mediation.data,rc4_mediation.data,rc5_mediation.data,r2_pc1,r2_pc2,r2_pc3,r2_pc4,r2_pc5,r2_ad)
 })
 
 # Merge all results
@@ -145,11 +173,16 @@ mediation_formatted_p.data <- cbind(mediation.data$snp_name,mediation_formatted_
 mediation_formatted_p.data[mediation_formatted_p.data < (0.05/6)] <- "sig"
 write.csv(mediation_formatted_p.data, file = "results/mediation_formateed_p.csv", row.names = F, quote = F)
 
-### Sex interaction mediaion models
+mediation_formatted_rounded_r2 <- round(mediation.data[c("r2_pc1","r2_pc2","r2_pc3","r2_pc4","r2_pc5","r2_ad")],4)
+mediation_formatted_r2.data <- cbind(mediation.data$snp_name,mediation_formatted_rounded_r2)
+write.csv(mediation_formatted_r2.data, file = "results/mediation_formatted_r2.csv", row.names = F, quote = F)
+
+
+### Sex interaction mediation models
 # Make male = 0 and female 1
 emif_adni.data$SEX <- emif_adni.data$SEX - 1
 
-# Sex interaction mdediation model
+# Sex interaction mediation model
 mediation_int.model <- '
   # SNP -> PC
   RC1 ~ intRC1*sexXsnp + snp_RC1*snp + SEX + AGE + PC1 + PC2 + PC3 + PC4 + PC5 + ADNI_genotyping + EMIF
@@ -184,16 +217,16 @@ mediation_int.model <- '
   rc4_mediation_female := snp_RC4_female_total*rc4_diagnosis
   rc5_mediation_female := snp_RC5_female_total*rc5_diagnosis
   
+  # All mediation effects female  
+  biomarker_mediation_female := rc1_mediation_female+rc2_mediation_female+rc3_mediation_female+rc4_mediation_female+rc5_mediation_female
+  # Total female
+  total_female := biomarker_mediation_female + snp_diagnosis_female_total
+  
   # All mediation effects male
   biomarker_mediation_male := rc1_mediation_male+rc2_mediation_male+rc3_mediation_male+rc4_mediation_male+rc5_mediation_male
   # Total male
   total_male := biomarker_mediation_female + snp_diagnosis
 
-  # All mediation effects female  
-  biomarker_mediation_female := rc1_mediation_female+rc2_mediation_female+rc3_mediation_female+rc4_mediation_female+rc5_mediation_female
-  # Totalmale
-  total_female := biomarker_mediation_female + snp_diagnosis_female_total
-  
   # Sex differences
   rc1_mediation_dif := rc1_mediation_female - rc1_mediation_male
   rc2_mediation_dif := rc2_mediation_female - rc2_mediation_male
@@ -219,7 +252,7 @@ mediation_int.list <- lapply(snp_names, function(snp_name) {
   mediation_int.fit <- sem(mediation_int.model, data = emif_adni.data, estimator = "WLSMV")
   
   ### Format results male
-  results.data <- parameterestimates(mediation_int.fit)
+  results.data <- parameterestimates(mediation_int.fit, rsquare = T)
   # SNP -> RC
   rc1_snp_male.data <- results.data[results.data$label == "snp_RC1",c("est","se","pvalue","ci.lower","ci.upper")]
   names(rc1_snp_male.data) <- paste0(names(rc1_snp_male.data),"_rc1_snp")
@@ -336,9 +369,17 @@ mediation_int.list <- lapply(snp_names, function(snp_name) {
   total_female.data <- results.data[results.data$label == "total_female",c("est","se","pvalue","ci.lower","ci.upper")]
   names(total_female.data) <- paste0(names(total_female.data),"_total")
   
+  ### R2
+  r2_pc1 <- results.data[results.data$lhs == "RC1" & results.data$op == "r2", "est"] - r2_baseline_pc1
+  r2_pc2 <- results.data[results.data$lhs == "RC2" & results.data$op == "r2", "est"] - r2_baseline_pc2
+  r2_pc3 <- results.data[results.data$lhs == "RC3" & results.data$op == "r2", "est"] - r2_baseline_pc3
+  r2_pc4 <- results.data[results.data$lhs == "RC4" & results.data$op == "r2", "est"] - r2_baseline_pc4
+  r2_pc5 <- results.data[results.data$lhs == "RC5" & results.data$op == "r2", "est"] - r2_baseline_pc5
+  r2_ad <- results.data[results.data$lhs == "diagnosis" & results.data$op == "r2", "est"] - r2_baseline_ad
+  
   # Combine all results
-  results_male.data <- cbind(snp_name,rc1_snp_male.data,rc1_snp_dif.data,rc1_diagnosis_male.data,rc1_mediation_male.data,rc1_mediation_dif.data,rc2_snp_male.data,rc2_snp_dif.data,rc2_diagnosis_male.data,rc2_mediation_male.data,rc2_mediation_dif.data,rc3_snp_male.data,rc3_snp_dif.data,rc3_diagnosis_male.data,rc3_mediation_male.data,rc3_mediation_dif.data,rc4_snp_male.data,rc4_snp_dif.data,rc4_diagnosis_male.data,rc4_mediation_male.data,rc4_mediation_dif.data,rc5_snp_male.data,rc5_snp_dif.data,rc5_diagnosis_male.data,rc5_mediation_male.data,rc5_mediation_dif.data,biomarker_mediation_male.data,mediation_dif.data,direct_male.data,direct_dif.data,total_male.data,total_dif.data)
-  results_female.data <- cbind(snp_name,rc1_snp_female.data,rc1_snp_dif.data,rc1_diagnosis_female.data,rc1_mediation_female.data,rc1_mediation_dif.data,rc2_snp_female.data,rc2_snp_dif.data,rc2_diagnosis_female.data,rc2_mediation_female.data,rc2_mediation_dif.data,rc3_snp_female.data,rc3_snp_dif.data,rc3_diagnosis_female.data,rc3_mediation_female.data,rc3_mediation_dif.data,rc4_snp_female.data,rc4_snp_dif.data,rc4_diagnosis_female.data,rc4_mediation_female.data,rc4_mediation_dif.data,rc5_snp_female.data,rc5_snp_dif.data,rc5_diagnosis_female.data,rc5_mediation_female.data,rc5_mediation_dif.data,biomarker_mediation_female.data,mediation_dif.data,direct_female.data,direct_dif.data,total_female.data,total_dif.data)
+  results_male.data <- cbind(snp_name,rc1_snp_male.data,rc1_snp_dif.data,rc1_diagnosis_male.data,rc1_mediation_male.data,rc1_mediation_dif.data,rc2_snp_male.data,rc2_snp_dif.data,rc2_diagnosis_male.data,rc2_mediation_male.data,rc2_mediation_dif.data,rc3_snp_male.data,rc3_snp_dif.data,rc3_diagnosis_male.data,rc3_mediation_male.data,rc3_mediation_dif.data,rc4_snp_male.data,rc4_snp_dif.data,rc4_diagnosis_male.data,rc4_mediation_male.data,rc4_mediation_dif.data,rc5_snp_male.data,rc5_snp_dif.data,rc5_diagnosis_male.data,rc5_mediation_male.data,rc5_mediation_dif.data,biomarker_mediation_male.data,mediation_dif.data,direct_male.data,direct_dif.data,total_male.data,total_dif.data,r2_pc1,r2_pc2,r2_pc3,r2_pc4,r2_pc5,r2_ad)
+  results_female.data <- cbind(snp_name,rc1_snp_female.data,rc1_snp_dif.data,rc1_diagnosis_female.data,rc1_mediation_female.data,rc1_mediation_dif.data,rc2_snp_female.data,rc2_snp_dif.data,rc2_diagnosis_female.data,rc2_mediation_female.data,rc2_mediation_dif.data,rc3_snp_female.data,rc3_snp_dif.data,rc3_diagnosis_female.data,rc3_mediation_female.data,rc3_mediation_dif.data,rc4_snp_female.data,rc4_snp_dif.data,rc4_diagnosis_female.data,rc4_mediation_female.data,rc4_mediation_dif.data,rc5_snp_female.data,rc5_snp_dif.data,rc5_diagnosis_female.data,rc5_mediation_female.data,rc5_mediation_dif.data,biomarker_mediation_female.data,mediation_dif.data,direct_female.data,direct_dif.data,total_female.data,total_dif.data,r2_pc1,r2_pc2,r2_pc3,r2_pc4,r2_pc5,r2_ad)
   names(results_female.data) <- names(results_male.data)
   results_formatted.data <- rbind(results_male.data,results_female.data)
   results_formatted.data$sex <- c("male","female")
@@ -366,6 +407,9 @@ mediation_int_formatted_p_dif.data <- cbind(mediation.data$snp_name,mediation_in
 mediation_int_formatted_p_dif.data[mediation_int_formatted_p_dif.data < 0.05] <- "sig"
 write.csv(mediation_int_formatted_p_dif.data, file = "results/mediation_int_formatted_p_dif.csv", row.names = F, quote = F)
 
+mediation_int_formatted_rounded_r2 <- round(mediation_int.data[c("r2_pc1","r2_pc2","r2_pc3","r2_pc4","r2_pc5","r2_ad")],4)
+mediation_int_formatted_r2.data <- cbind(mediation.data$snp_name,mediation_formatted_rounded_r2)
+write.csv(mediation_int_formatted_r2.data, file = "results/mediation_int_formatted_r2.csv", row.names = F, quote = F)
 
 ### Sensitivity check, stratified analysis
 # SEM
